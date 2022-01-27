@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>ドラッグ可能マーカーを作成</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js"></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js'></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <style>
+        .coordinates {
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            position: absolute;
+            bottom: 40px;
+            left: 10px;
+            padding: 5px 10px;
+            margin: 0;
+            font-size: 11px;
+            line-height: 18px;
+            border-radius: 3px;
+            display: block;
+        }
+    </style>
+
+    <div id="map"></div>
+    <pre id="coordinates" class="coordinates"></pre>
+
+    <script>
+        /*
+        下記機能を入れたサンプルアプリ
+        1.初期の緯度経度でマーカーをプロットする
+        2.地図の任意の地点をクリックするとそこにマーカーをプロットできる
+        3.マーカーをクリックしてドラッグするとマーカーの位置をずらせる
+        4.マーカーを設置する際にgeocodeAPIをよび住所が得られればそれを画面に表示する
+        */
+        const coordinates = document.getElementById('coordinates');
+        const aT = '{mapboxで登録した際に得られるAccessTokenを入れる}'
+        const geocode_api_endpoint = 'https://api.mapbox.com/geocoding/v5/mapbox.places/';
+        mapboxgl.accessToken = aT;
+
+        //最初にマーカーを打つ緯度経度
+        const init_position = {
+            'lat': 35.6514941,
+            'lon': 140.042433,
+        }
+        //マップのオプション
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: [init_position['lon'], init_position['lat']],
+            zoom: 9
+        });
+        //ズームボタンを表示する
+        map.addControl(new mapboxgl.NavigationControl());
+
+        //マップに表示される名称を日本語にする
+        mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js');
+        map.addControl(new MapboxLanguage({
+            defaultLanguage: 'ja'
+        }));
+
+        //マーカーを初期緯度経度でマップ上に表示
+        const marker = new mapboxgl.Marker({
+            draggable: true
+        }).setLngLat([init_position['lon'], init_position['lat']])
+            .addTo(map);
+
+        //マーカーをドラッグアンドドロップした際の緯度経度を取得する関数
+        function onDragEnd() {
+            const lngLat = marker.getLngLat();
+            coordinates.innerHTML = `Longitude: ${lngLat.lng}<br />Latitude: ${lngLat.lat}`;
+        }
+        //マーカーのドラッグ終了したイベントにonDragEndを紐づける
+        marker.on('dragend', onDragEnd);
+
+        //マップをクリックするとクリックした位置でマーカーを打つ
+        map.on('click', function (e) {
+            const lat = e.lngLat.lat;
+            const lng = e.lngLat.lng;
+            const rev_geocode_url = geocode_api_endpoint + lng + ',' + lat + '.json?types=poi&access_token=' + aT;
+            let result = '';
+            const getGeoData = async() => {
+                const response = await fetch(rev_geocode_url);
+                result = await response.json();
+                const postcode = result['features'][0]['context'][0]['text'] || '';
+                const dim = result['features'][0]['context'][1]['text'] || '';
+                const pref = result['features'][0]['context'][2]['text'] || '';
+                const address = result['features'][0]['properties']['address'] || '';
+                const addr_str = postcode + ' : ' + pref + dim + address;
+                marker.setLngLat([lng, lat]);
+                coordinates.innerHTML = `name : ${addr_str} <br />Longitude: ${lng}<br />Latitude: ${lat}`;
+            }
+            getGeoData();
+        });
+    </script>
+
+</body>
+
+</html>
